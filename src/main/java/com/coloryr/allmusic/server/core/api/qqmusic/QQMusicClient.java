@@ -100,7 +100,7 @@ final class QQMusicClient {
                 QQMusicCredential.EMPTY,
                 2
         );
-        return loginCredential(result, "QQ Music QQLogin");
+        return loginCredential(result, "QQ Music QQLogin", null);
     }
 
     QQMusicCredential refreshCredential(QQMusicCredential current) throws IOException {
@@ -116,26 +116,26 @@ final class QQMusicClient {
                 current,
                 current.loginType
         );
-        return loginCredential(result, "QQ Music credential refresh");
+        return loginCredential(result, "QQ Music credential refresh", current);
     }
 
-    private static JsonObject refreshParam(QQMusicCredential current) {
+    static JsonObject refreshParam(QQMusicCredential current) {
         JsonObject param = new JsonObject();
         param.addProperty("openid", current.openId);
         param.addProperty("refresh_token", current.refreshToken);
         param.addProperty("musickey", current.musicKey);
         param.addProperty("refresh_key", current.refreshKey);
         param.addProperty("loginMode", 2);
+        long expiresIn = current.keyExpiresIn > 0L ? current.keyExpiresIn : QQMusicCredential.DEFAULT_KEY_EXPIRES_IN;
+        param.addProperty("expired_in", expiresIn);
         if (current.loginType == 1) {
             param.addProperty("str_musicid", current.stringMusicId);
             param.addProperty("unionid", current.unionId);
         } else if (current.loginType == 2) {
             param.addProperty("access_token", current.accessToken);
-            param.addProperty("expired_in", current.expiredAt);
             param.addProperty("musicid", current.musicId);
         } else {
             param.addProperty("access_token", current.accessToken);
-            param.addProperty("expired_in", current.expiredAt);
             param.addProperty("str_musicid", current.stringMusicId);
             param.addProperty("musicid", current.musicId);
             param.addProperty("unionid", current.unionId);
@@ -144,6 +144,10 @@ final class QQMusicClient {
     }
 
     static QQMusicCredential loginCredential(CallResult result, String operation) throws IOException {
+        return loginCredential(result, operation, null);
+    }
+
+    static QQMusicCredential loginCredential(CallResult result, String operation, QQMusicCredential previous) throws IOException {
         result.requireSuccess(operation);
         JsonObject envelope = result.data;
         int loginCode = QQMusicSupport.integer(envelope, "code", 0);
@@ -152,7 +156,8 @@ final class QQMusicClient {
         }
         JsonObject payload = QQMusicSupport.object(envelope, "data");
         QQMusicCredential credential = QQMusicCredential.fromLoginData(
-                payload == null ? envelope : payload
+                payload == null ? envelope : payload,
+                previous
         );
         if (!credential.isComplete()) {
             throw new IOException(operation + " returned incomplete credentials");

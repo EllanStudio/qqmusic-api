@@ -102,6 +102,25 @@ class QQMusicClientTest {
         assertThrows(Exception.class, () -> QQMusicClient.loginCredential(result, "test login"));
     }
 
+    @Test
+    void buildsValidRefreshParamWithoutAbsoluteTimestampCorruption() {
+        QQMusicCredential credential = new QQMusicCredential(
+                "open-123", "refresh-token-123", "access-token-123", 1800000000L,
+                "123456", "Q_H_L_key", "union-123", "123456",
+                "refresh-key-123", 1700000000L, 259200L, 2);
+
+        JsonObject param = QQMusicClient.refreshParam(credential);
+
+        assertEquals("open-123", param.get("openid").getAsString());
+        assertEquals("refresh-token-123", param.get("refresh_token").getAsString());
+        assertEquals("Q_H_L_key", param.get("musickey").getAsString());
+        assertEquals("refresh-key-123", param.get("refresh_key").getAsString());
+        assertEquals(2, param.get("loginMode").getAsInt());
+        assertEquals(259200L, param.get("expired_in").getAsLong());
+        assertEquals("access-token-123", param.get("access_token").getAsString());
+        assertEquals("123456", param.get("musicid").getAsString());
+    }
+
     private QQMusicClient clientWithConfig() throws Exception {
         Path config = temporaryDirectory.resolve("qqmusic.json");
         String json = "{\"credential\":{},\"qrLogin\":false,\"autoRefresh\":false,"

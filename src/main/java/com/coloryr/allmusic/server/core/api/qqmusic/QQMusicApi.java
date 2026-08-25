@@ -208,6 +208,7 @@ public final class QQMusicApi implements IMusicApi {
                 @Override
                 public T call() throws Exception {
                     config.reloadIfChanged();
+                    login.ensureFresh();
                     return operation.run();
                 }
             });

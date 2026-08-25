@@ -47,6 +47,8 @@ final class QQMusicLogin {
         this.http = client.http();
     }
 
+    private static final long AUTO_REFRESH_CHECK_MILLIS = 30 * 60 * 1000L; // 30 minutes
+
     void start() {
         config.reloadIfChanged();
         if (config.autoRefresh() && config.credential().expiresSoon()) {
@@ -55,6 +57,30 @@ final class QQMusicLogin {
             startQrLogin("startup", false);
         }
         startReloginWatcher();
+        startAutoRefreshDaemon();
+    }
+
+    private void startAutoRefreshDaemon() {
+        Thread thread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                while (!Thread.currentThread().isInterrupted()) {
+                    try {
+                        Thread.sleep(AUTO_REFRESH_CHECK_MILLIS);
+                        config.reloadIfChanged();
+                        if (config.autoRefresh() && config.credential().expiresSoon()) {
+                            refreshNow();
+                        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    } catch (Throwable e) {
+                        QQMusicSupport.logError("QQ Music auto-refresh daemon failed: " + e.getMessage());
+                    }
+                }
+            }
+        }, "AllMusic-QQMusic-AutoRefreshDaemon");
+        thread.setDaemon(true);
+        thread.start();
     }
 
     void ensureFresh() {

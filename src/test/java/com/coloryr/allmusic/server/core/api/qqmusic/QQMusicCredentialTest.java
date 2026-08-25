@@ -44,4 +44,60 @@ class QQMusicCredentialTest {
         data.addProperty("musicid", "123456");
         assertFalse(QQMusicCredential.fromLoginData(data).isComplete());
     }
+
+    @Test
+    void parsesServerStandardExpiredInAndCreateTimeFields() {
+        JsonObject data = new JsonObject();
+        data.addProperty("musicid", "123456");
+        data.addProperty("musickey", "Q_H_L_abc");
+        data.addProperty("expired_in", 259200L);
+        data.addProperty("psrf_musickey_createtime", 1700000000L);
+        data.addProperty("psrf_qqopenid", "test-openid");
+        data.addProperty("psrf_qqrefresh_token", "test-refresh");
+
+        QQMusicCredential credential = QQMusicCredential.fromLoginData(data);
+
+        assertTrue(credential.isComplete());
+        assertEquals(259200L, credential.keyExpiresIn);
+        assertEquals(1700000000L, credential.musicKeyCreateTime);
+        assertEquals("test-openid", credential.openId);
+        assertEquals("test-refresh", credential.refreshToken);
+        assertTrue(credential.expiresSoon());
+    }
+
+    @Test
+    void appliesSafeDefaultsWhenExpiryFieldsAreOmitted() {
+        JsonObject data = new JsonObject();
+        data.addProperty("musicid", "123456");
+        data.addProperty("musickey", "Q_H_L_fresh");
+
+        QQMusicCredential credential = QQMusicCredential.fromLoginData(data);
+
+        assertTrue(credential.isComplete());
+        assertEquals(QQMusicCredential.DEFAULT_KEY_EXPIRES_IN, credential.keyExpiresIn);
+        assertTrue(credential.musicKeyCreateTime > 0L);
+        assertFalse(credential.expiresSoon());
+    }
+
+    @Test
+    void mergesPreviousCredentialFieldsOnRefreshResponse() {
+        QQMusicCredential previous = new QQMusicCredential(
+                "orig-openid", "orig-refresh-token", "orig-access-token", 1800000000L,
+                "123456", "Q_H_L_old", "orig-union", "123456",
+                "orig-refresh-key", 1700000000L, 259200L, 2
+        );
+
+        JsonObject refreshData = new JsonObject();
+        refreshData.addProperty("musickey", "Q_H_L_renewed");
+        refreshData.addProperty("expired_in", 259200L);
+
+        QQMusicCredential merged = QQMusicCredential.fromLoginData(refreshData, previous);
+
+        assertEquals("123456", merged.musicId);
+        assertEquals("Q_H_L_renewed", merged.musicKey);
+        assertEquals("orig-openid", merged.openId);
+        assertEquals("orig-refresh-token", merged.refreshToken);
+        assertEquals("orig-refresh-key", merged.refreshKey);
+        assertEquals(2, merged.loginType);
+    }
 }
