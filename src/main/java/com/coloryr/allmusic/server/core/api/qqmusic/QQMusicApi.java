@@ -141,7 +141,6 @@ public final class QQMusicApi implements IMusicApi {
         return withBusy(new Operation<String>() {
             @Override
             public String run() throws Exception {
-                login.ensureFresh();
                 QQMusicTrack track = client.getTrack(songMid);
                 return track == null ? null : client.getPlayUrl(track);
             }

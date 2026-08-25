@@ -15,6 +15,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -38,13 +42,40 @@ final class QQMusicLogin {
     private final QQMusicConfig config;
     private final QQMusicClient client;
     private final QQMusicHttp http;
+    private final ExecutorService refreshExecutor;
+    private final CredentialRefresher credentialRefresher;
     private final AtomicBoolean loginBusy = new AtomicBoolean(false);
-    private final AtomicBoolean refreshBusy = new AtomicBoolean(false);
+    private final AtomicBoolean refreshQueued = new AtomicBoolean(false);
 
     QQMusicLogin(QQMusicConfig config, QQMusicClient client) {
+        this(config, client, createRefreshExecutor(), null);
+    }
+
+    QQMusicLogin(QQMusicConfig config, QQMusicClient client, ExecutorService refreshExecutor,
+                 CredentialRefresher credentialRefresher) {
         this.config = config;
         this.client = client;
         this.http = client.http();
+        this.refreshExecutor = refreshExecutor;
+        this.credentialRefresher = credentialRefresher == null
+                ? new CredentialRefresher() {
+                    @Override
+                    public QQMusicCredential refresh(QQMusicCredential current) throws IOException {
+                        return client.refreshCredential(current);
+                    }
+                }
+                : credentialRefresher;
+    }
+
+    private static ExecutorService createRefreshExecutor() {
+        return Executors.newSingleThreadExecutor(new ThreadFactory() {
+            @Override
+            public Thread newThread(Runnable runnable) {
+                Thread thread = new Thread(runnable, "AllMusic-QQMusic-Refresh");
+                thread.setDaemon(true);
+                return thread;
+            }
+        });
     }
 
     private static final long AUTO_REFRESH_CHECK_MILLIS = 30 * 60 * 1000L; // 30 minutes
@@ -69,7 +100,7 @@ final class QQMusicLogin {
                         Thread.sleep(AUTO_REFRESH_CHECK_MILLIS);
                         config.reloadIfChanged();
                         if (config.autoRefresh() && config.credential().expiresSoon()) {
-                            refreshNow();
+                            startRefresh();
                         }
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
@@ -83,29 +114,41 @@ final class QQMusicLogin {
         thread.start();
     }
 
+    /**
+     * Performs only volatile reads on the caller thread. Any network or file I/O
+     * is queued on the dedicated refresh worker so a Minecraft server thread is
+     * never held up by credential renewal.
+     */
     void ensureFresh() {
-        config.reloadIfChanged();
         QQMusicCredential credential = config.credential();
         if (config.autoRefresh() && credential.expiresSoon()) {
-            refreshNow();
+            startRefresh();
         }
     }
 
     private void startRefresh() {
-        Thread thread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                refreshNow();
-            }
-        }, "AllMusic-QQMusic-Refresh");
-        thread.setDaemon(true);
-        thread.start();
+        if (!refreshQueued.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            refreshExecutor.execute(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        refreshNow();
+                    } finally {
+                        refreshQueued.set(false);
+                    }
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            refreshQueued.set(false);
+            QQMusicSupport.logError("QQ Music credential refresh could not be queued: "
+                    + e.getMessage());
+        }
     }
 
     private void refreshNow() {
-        if (!refreshBusy.compareAndSet(false, true)) {
-            return;
-        }
         try {
             config.reloadIfChanged();
             QQMusicCredential current = config.credential();
@@ -114,14 +157,12 @@ final class QQMusicLogin {
                 startQrLogin("credential-refresh-unavailable", false);
                 return;
             }
-            QQMusicCredential refreshed = client.refreshCredential(current);
+            QQMusicCredential refreshed = credentialRefresher.refresh(current);
             config.saveCredential(refreshed);
             QQMusicSupport.logInfo("QQ Music credential refreshed");
         } catch (Exception e) {
             QQMusicSupport.logError("QQ Music credential refresh failed: " + e.getMessage());
             startQrLogin("credential-refresh-failed", false);
-        } finally {
-            refreshBusy.set(false);
         }
     }
 
@@ -472,6 +513,10 @@ final class QQMusicLogin {
             this.image = image;
             this.cookies = cookies;
         }
+    }
+
+    interface CredentialRefresher {
+        QQMusicCredential refresh(QQMusicCredential current) throws IOException;
     }
 
     static final class QrStatus {
