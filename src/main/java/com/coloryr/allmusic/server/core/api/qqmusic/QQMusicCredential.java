@@ -242,8 +242,23 @@ final class QQMusicCredential {
         QQMusicHttp.CookieJar cookies = new QQMusicHttp.CookieJar();
         cookies.put("uin", stringMusicId);
         cookies.put("qqmusic_uin", stringMusicId);
+        cookies.put("qm_str_musicid", stringMusicId);
+        cookies.put("musicid", stringMusicId);
         cookies.put("qm_keyst", musicKey);
         cookies.put("qqmusic_key", musicKey);
+        cookies.put("musickey", musicKey);
+        cookies.put("psrf_qqopenid", openId);
+        cookies.put("psrf_qqrefresh_token", refreshToken);
+        cookies.put("psrf_qqaccess_token", accessToken);
+        cookies.put("psrf_qqunionid", unionId);
+        if (expiredAt > 0L) {
+            cookies.put("psrf_access_token_expiresAt", String.valueOf(expiredAt));
+        }
+        cookies.put("qm_refresh_key", refreshKey);
+        cookies.put("psrf_musickey_createtime", String.valueOf(musicKeyCreateTime));
+        if (loginType > 0) {
+            cookies.put("tmeLoginType", String.valueOf(loginType));
+        }
         return cookies.header();
     }
 

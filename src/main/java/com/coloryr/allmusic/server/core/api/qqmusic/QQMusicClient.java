@@ -126,13 +126,11 @@ final class QQMusicClient {
         }
         JsonObject param = refreshParam(current);
 
-        CallResult result = call(
-                "music.login.LoginServer",
-                "Login",
-                param,
-                current,
-                current.loginType
-        );
+        // LoginServer.Login is shared with the mobile QQ Music client.  The
+        // web comm block (ct=24) is accepted by many musicu APIs, but the
+        // refresh endpoint rejects it with code 10006.  Keep this request on
+        // the Android comm profile used by current QQ Music clients.
+        CallResult result = refreshCall(param, current);
         return loginCredential(result, "QQ Music credential refresh", current);
     }
 
@@ -143,8 +141,16 @@ final class QQMusicClient {
         param.addProperty("musickey", current.musicKey);
         param.addProperty("refresh_key", current.refreshKey);
         param.addProperty("loginMode", 2);
-        long expiresIn = current.keyExpiresIn > 0L ? current.keyExpiresIn : QQMusicCredential.DEFAULT_KEY_EXPIRES_IN;
-        param.addProperty("expired_in", expiresIn);
+        // QQ's mobile clients send the OAuth expiry value here.  It is an
+        // absolute timestamp for current QR logins; older credentials may
+        // still contain a relative value, so preserve that value as a
+        // fallback rather than replacing it with the music-key lifetime.
+        long expiredIn = current.expiredAt > 0L
+                ? current.expiredAt
+                : (current.keyExpiresIn > 0L
+                ? current.keyExpiresIn
+                : QQMusicCredential.DEFAULT_KEY_EXPIRES_IN);
+        param.addProperty("expired_in", expiredIn);
         if (current.loginType == 1) {
             param.addProperty("str_musicid", current.stringMusicId);
             param.addProperty("unionid", current.unionId);
@@ -158,6 +164,59 @@ final class QQMusicClient {
             param.addProperty("unionid", current.unionId);
         }
         return param;
+    }
+
+    private CallResult refreshCall(JsonObject param, QQMusicCredential credential) throws IOException {
+        JsonObject root = new JsonObject();
+        root.add("comm", buildMobileComm(credential));
+        JsonObject request = new JsonObject();
+        request.addProperty("module", "music.login.LoginServer");
+        request.addProperty("method", "Login");
+        request.add("param", param == null ? new JsonObject() : param);
+        // Current Android clients use `request`; older web clients used
+        // `req_0`.  The server accepts the former for the mobile comm block.
+        root.add("request", request);
+
+        QQMusicHttp.Response response = http.postJson(MUSICU_URL, root,
+                requestHeaders(credential));
+        if (!response.isSuccess()) {
+            throw new IOException("QQ Music API failed, HTTP " + response.status);
+        }
+        JsonObject responseRoot = response.json();
+        JsonObject item = QQMusicSupport.object(responseRoot, "request");
+        if (item == null) {
+            item = QQMusicSupport.object(responseRoot, "req_0");
+        }
+        int code = item == null
+                ? QQMusicSupport.integer(responseRoot, "code", -1)
+                : QQMusicSupport.integer(item, "code", QQMusicSupport.integer(responseRoot, "code", -1));
+        JsonObject data = item == null ? null : QQMusicSupport.object(item, "data");
+        return new CallResult(code, data == null ? new JsonObject() : data, responseRoot);
+    }
+
+    static JsonObject buildMobileComm(QQMusicCredential credential) {
+        QQMusicCredential active = credential == null ? QQMusicCredential.EMPTY : credential;
+        JsonObject comm = new JsonObject();
+        comm.addProperty("ct", 11);
+        comm.addProperty("cv", 14090008);
+        comm.addProperty("v", 14090008);
+        comm.addProperty("chid", "10003505");
+        comm.addProperty("os_ver", "15");
+        comm.addProperty("phonetype", "24122RKC7C");
+        comm.addProperty("tmeAppID", "qqmusic");
+        comm.addProperty("nettype", "NETWORK_WIFI");
+        comm.addProperty("udid", "0");
+        comm.addProperty("OpenUDID", "0");
+        comm.addProperty("QIMEI36", "0");
+        comm.addProperty("uin", active.isComplete() ? active.stringMusicId : "0");
+        if (active.isComplete()) {
+            comm.addProperty("qq", active.stringMusicId);
+            comm.addProperty("authst", active.musicKey);
+            if (active.loginType > 0) {
+                comm.addProperty("tmeLoginType", active.loginType);
+            }
+        }
+        return comm;
     }
 
     static QQMusicCredential loginCredential(CallResult result, String operation) throws IOException {

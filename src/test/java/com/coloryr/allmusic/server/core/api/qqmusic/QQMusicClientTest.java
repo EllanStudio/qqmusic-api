@@ -116,9 +116,28 @@ class QQMusicClientTest {
         assertEquals("Q_H_L_key", param.get("musickey").getAsString());
         assertEquals("refresh-key-123", param.get("refresh_key").getAsString());
         assertEquals(2, param.get("loginMode").getAsInt());
-        assertEquals(259200L, param.get("expired_in").getAsLong());
+        assertEquals(1800000000L, param.get("expired_in").getAsLong());
         assertEquals("access-token-123", param.get("access_token").getAsString());
         assertEquals("123456", param.get("musicid").getAsString());
+    }
+
+    @Test
+    void buildsMobileRefreshCommFields() {
+        QQMusicCredential credential = new QQMusicCredential(
+                "open", "refresh", "access", 1800000000L,
+                "123456", "Q_H_L_key", "union", "123456",
+                "", 0L, 259200L, 2);
+
+        JsonObject comm = QQMusicClient.buildMobileComm(credential);
+
+        assertEquals(11, comm.get("ct").getAsInt());
+        assertEquals(14090008, comm.get("cv").getAsInt());
+        assertEquals(14090008, comm.get("v").getAsInt());
+        assertEquals("10003505", comm.get("chid").getAsString());
+        assertEquals("qqmusic", comm.get("tmeAppID").getAsString());
+        assertEquals("123456", comm.get("uin").getAsString());
+        assertEquals("Q_H_L_key", comm.get("authst").getAsString());
+        assertEquals(2, comm.get("tmeLoginType").getAsInt());
     }
 
     private QQMusicClient clientWithConfig() throws Exception {
