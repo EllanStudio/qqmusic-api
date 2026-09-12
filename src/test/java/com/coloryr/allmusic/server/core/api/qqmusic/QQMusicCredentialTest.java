@@ -14,6 +14,7 @@ class QQMusicCredentialTest {
         source.addProperty("musicid", "o00123456");
         source.addProperty("musickey", "Q_H_L_test");
         source.addProperty("str_musicid", "00123456");
+        source.addProperty("refresh_token", "refresh-token");
         source.addProperty("refresh_key", "refresh");
         source.addProperty("loginType", 2);
         JsonObject root = new JsonObject();
@@ -27,6 +28,8 @@ class QQMusicCredentialTest {
         assertTrue(credential.canRefresh());
         assertTrue(credential.cookieHeader().contains("uin=123456"));
         assertTrue(credential.cookieHeader().contains("qm_keyst=Q_H_L_test"));
+        assertTrue(credential.cookieHeader().contains("psrf_qqrefresh_token="));
+        assertTrue(credential.cookieHeader().contains("qm_refresh_key=refresh"));
     }
 
     @Test

@@ -214,7 +214,7 @@ final class QQMusicLogin {
             QrStatus status = checkQrCode(qrCode.qrSig, cookies);
             if ("0".equals(status.code)) {
                 String authorizationCode = completeQQAuthorization(status.callbackUrl, cookies);
-                QQMusicCredential credential = client.exchangeQQCode(authorizationCode);
+                QQMusicCredential credential = client.exchangeQQCode(authorizationCode, cookies.header());
                 config.saveCredential(credential);
                 QQMusicSupport.logInfo("QQ Music QR login success, credential=true");
                 return;
