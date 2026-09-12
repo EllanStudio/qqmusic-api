@@ -91,15 +91,32 @@ final class QQMusicClient {
     }
 
     QQMusicCredential exchangeQQCode(String code) throws IOException {
+        return exchangeQQCode(code, "");
+    }
+
+    QQMusicCredential exchangeQQCode(String code, String cookieHeader) throws IOException {
         JsonObject param = new JsonObject();
         param.addProperty("code", code);
-        CallResult result = call(
+        JsonObject request = buildRequest(
                 "QQConnectLogin.LoginServer",
                 "QQLogin",
                 param,
                 QQMusicCredential.EMPTY,
                 2
         );
+        QQMusicHttp.Response response = http.postJson(MUSICU_URL, request,
+                requestHeaders(QQMusicCredential.EMPTY, cookieHeader));
+        if (!response.isSuccess()) {
+            throw new IOException("QQ Music QQLogin failed, HTTP " + response.status);
+        }
+        JsonObject root = response.json();
+        JsonObject item = QQMusicSupport.object(root, "req_0");
+        int codeValue = item == null
+                ? QQMusicSupport.integer(root, "code", -1)
+                : QQMusicSupport.integer(item, "code", QQMusicSupport.integer(root, "code", -1));
+        JsonObject data = item == null ? null : QQMusicSupport.object(item, "data");
+        CallResult result = new CallResult(codeValue,
+                data == null ? new JsonObject() : data, root);
         return loginCredential(result, "QQ Music QQLogin", null);
     }
 
@@ -304,12 +321,18 @@ final class QQMusicClient {
     }
 
     private Map<String, String> requestHeaders(QQMusicCredential credential) {
+        return requestHeaders(credential, "");
+    }
+
+    private Map<String, String> requestHeaders(QQMusicCredential credential, String cookieHeader) {
         Map<String, String> headers = QQMusicHttp.headers(
                 "Origin", "https://y.qq.com",
                 "Referer", REFERER
         );
         if (credential != null && credential.isComplete()) {
             headers.put("Cookie", credential.cookieHeader());
+        } else if (!QQMusicSupport.isBlank(cookieHeader)) {
+            headers.put("Cookie", cookieHeader);
         }
         return headers;
     }
