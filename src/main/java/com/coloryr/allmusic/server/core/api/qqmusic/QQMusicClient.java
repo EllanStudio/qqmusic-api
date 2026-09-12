@@ -156,14 +156,22 @@ final class QQMusicClient {
             param.addProperty("unionid", current.unionId);
         } else if (current.loginType == 2) {
             param.addProperty("access_token", current.accessToken);
-            param.addProperty("musicid", current.musicId);
+            param.addProperty("musicid", numericMusicId(current.musicId));
         } else {
             param.addProperty("access_token", current.accessToken);
             param.addProperty("str_musicid", current.stringMusicId);
-            param.addProperty("musicid", current.musicId);
+            param.addProperty("musicid", numericMusicId(current.musicId));
             param.addProperty("unionid", current.unionId);
         }
         return param;
+    }
+
+    private static long numericMusicId(String value) {
+        try {
+            return Long.parseLong(value);
+        } catch (RuntimeException ignored) {
+            return 0L;
+        }
     }
 
     private CallResult refreshCall(JsonObject param, QQMusicCredential credential) throws IOException {

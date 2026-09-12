@@ -118,7 +118,7 @@ class QQMusicClientTest {
         assertEquals(2, param.get("loginMode").getAsInt());
         assertEquals(1800000000L, param.get("expired_in").getAsLong());
         assertEquals("access-token-123", param.get("access_token").getAsString());
-        assertEquals("123456", param.get("musicid").getAsString());
+        assertEquals(123456L, param.get("musicid").getAsLong());
     }
 
     @Test
