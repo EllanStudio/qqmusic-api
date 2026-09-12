@@ -100,4 +100,22 @@ class QQMusicCredentialTest {
         assertEquals("orig-refresh-key", merged.refreshKey);
         assertEquals(2, merged.loginType);
     }
+
+    @Test
+    void preservesPreviousRefreshKeyWhenRefreshResponseReturnsBlankValue() {
+        QQMusicCredential previous = new QQMusicCredential(
+                "orig-openid", "orig-refresh-token", "orig-access-token", 1800000000L,
+                "123456", "Q_H_L_old", "orig-union", "123456",
+                "orig-refresh-key", 1700000000L, 259200L, 2
+        );
+
+        JsonObject refreshData = new JsonObject();
+        refreshData.addProperty("musickey", "Q_H_L_renewed");
+        refreshData.addProperty("refresh_key", "");
+        refreshData.addProperty("expired_in", 259200L);
+
+        QQMusicCredential merged = QQMusicCredential.fromLoginData(refreshData, previous);
+
+        assertEquals("orig-refresh-key", merged.refreshKey);
+    }
 }
